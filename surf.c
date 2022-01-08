@@ -37,7 +37,7 @@
 #define LENGTH(x)               (sizeof(x) / sizeof(x[0]))
 #define CLEANMASK(mask)         (mask & (MODKEY|GDK_SHIFT_MASK))
 
-enum { AtomFind, AtomGo, AtomUri, AtomUTF8, AtomLast };
+enum { AtomFind, AtomGo, AtomSearch, AtomUri, AtomUTF8, AtomBook, AtomBookList, AtomBookAdd, AtomBookDel, AtomLast };
 
 enum {
 	OnDoc   = WEBKIT_HIT_TEST_RESULT_CONTEXT_DOCUMENT,
@@ -233,6 +233,12 @@ static void togglefullscreen(Client *c, const Arg *a);
 static void togglecookiepolicy(Client *c, const Arg *a);
 static void toggleinspector(Client *c, const Arg *a);
 static void find(Client *c, const Arg *a);
+static void search(Client *c, const Arg *a);
+static void bookmarkgo(Client *c, const Arg *a);
+static void bookmarkadd(Client *c, const Arg *a);
+static void bookmarkdel(Client *c, const Arg *a);
+static const char *bookmarkproplist();
+
 
 /* Buttons */
 static void clicknavigate(Client *c, const Arg *a, WebKitHitTestResult *h);
@@ -338,8 +344,13 @@ setup(void)
 	/* atoms */
 	atoms[AtomFind] = XInternAtom(dpy, "_SURF_FIND", False);
 	atoms[AtomGo] = XInternAtom(dpy, "_SURF_GO", False);
+	atoms[AtomSearch] = XInternAtom(dpy, "_SURF_SEARCH", False);
 	atoms[AtomUri] = XInternAtom(dpy, "_SURF_URI", False);
 	atoms[AtomUTF8] = XInternAtom(dpy, "UTF8_STRING", False);
+	atoms[AtomBook] = XInternAtom(dpy, "_SURF_BOOK", False);
+	atoms[AtomBookList] = XInternAtom(dpy, "_SURF_BOOKLIST", False);
+	atoms[AtomBookAdd] = XInternAtom(dpy, "_SURF_BOOKADD", False);
+	atoms[AtomBookDel] = XInternAtom(dpy, "_SURF_BOOKDEL", False);
 
 	gtk_init(NULL, NULL);
 
@@ -350,6 +361,7 @@ setup(void)
 	/* dirs and files */
 	cookiefile = buildfile(cookiefile);
 	scriptfile = buildfile(scriptfile);
+	bookmarkfile = buildfile(bookmarkfile);
 	certdir    = buildpath(certdir);
 	if (curconfig[Ephemeral].val.i)
 		cachedir = NULL;
@@ -595,6 +607,99 @@ loaduri(Client *c, const Arg *a)
 	g_free(url);
 }
 
+void 
+search(Client *c, const Arg *a)
+{
+	Arg arg;
+	char *url;
+
+	url = g_strdup_printf(searchurl, a->v);
+	arg.v = url;
+	loaduri(c, &arg);
+
+	g_free(url);
+}
+
+const char *
+bookmarkproplist()
+{
+	GKeyFile *bmarks = g_key_file_new();
+	gchar** keys;
+	gsize* length;
+	gchar proplist[BUFSIZ] = "";
+
+	g_key_file_load_from_file(bmarks, bookmarkfile, G_KEY_FILE_NONE, NULL);
+
+	keys = g_key_file_get_keys(bmarks, "Bookmarks", &length, NULL);
+	for(int i = 0;i<length;i++)
+	{
+		g_strlcat(proplist, keys[i], BUFSIZ);
+		g_strlcat(proplist, "\\n", BUFSIZ);
+
+	}
+
+	g_key_file_free(bmarks);
+	g_free(keys);
+
+	return g_strdup_printf("%s", proplist);
+}
+
+void
+bookmarkgo(Client *c, const Arg *a)
+{
+	Arg arg;
+	char *url;
+	GKeyFile *bmarks = g_key_file_new();
+	g_key_file_load_from_file(bmarks, bookmarkfile, G_KEY_FILE_NONE, NULL);
+
+	url = g_key_file_get_string(bmarks, "Bookmarks", a->v, NULL);
+	arg.v = url;
+	if(url != NULL)
+		loaduri(c, &arg);
+	
+	g_key_file_free(bmarks);
+	g_free(url);
+
+}
+
+void
+bookmarkadd(Client *c, const Arg *a)
+{
+	GKeyFile *bmarks = g_key_file_new();
+	char *url = geturi(c);
+	char *prop;
+	g_key_file_load_from_file(bmarks, bookmarkfile, G_KEY_FILE_NONE, NULL);
+
+	g_key_file_set_string(bmarks, "Bookmarks", a->v,url);
+
+	g_key_file_save_to_file(bmarks, bookmarkfile, NULL);
+
+	prop = bookmarkproplist();
+	setatom(c, AtomBookList, prop);
+	
+	g_key_file_free(bmarks);
+	g_free(prop);
+}
+
+void
+bookmarkdel(Client *c, const Arg *a)
+{
+	GKeyFile *bmarks = g_key_file_new();
+	char *prop;
+
+	g_key_file_load_from_file(bmarks, bookmarkfile, G_KEY_FILE_NONE, NULL);
+
+	g_key_file_remove_key(bmarks, "Bookmarks", a->v, NULL);
+
+	g_key_file_save_to_file(bmarks, bookmarkfile, NULL);
+
+	prop = bookmarkproplist();
+	setatom(c, AtomBookList, prop);
+	
+	g_key_file_free(bmarks);
+	g_free(prop);
+}
+
 const char *
 geturi(Client *c)
 {
@@ -632,7 +737,6 @@ getatom(Client *c, int a)
 	else
 		buf[0] = '\0';
 	XFree(p);
-
 	return buf;
 }
 
@@ -1326,6 +1430,26 @@ processx(GdkXEvent *e, GdkEvent *event, gpointer d)
 				loaduri(c, &a);
 
 				return GDK_FILTER_REMOVE;
+			} else if (ev->atom == atoms[AtomSearch]) {
+				a.v = getatom(c, AtomSearch);
+				search(c, &a);
+
+				return GDK_FILTER_REMOVE;
+			} else if (ev->atom == atoms[AtomBook]) {
+				a.v = getatom(c, AtomBook);
+				bookmarkgo(c, &a);
+
+				return GDK_FILTER_REMOVE;
+			} else if (ev->atom == atoms[AtomBookAdd]) {
+				a.v = getatom(c, AtomBookAdd);
+				bookmarkadd(c, &a);
+
+				return GDK_FILTER_REMOVE;
+			} else if (ev->atom == atoms[AtomBookDel]) {
+				a.v = getatom(c, AtomBookDel);
+				bookmarkdel(c, &a);
+
+				return GDK_FILTER_REMOVE;
 			}
 		}
 	}
@@ -1377,6 +1501,7 @@ showview(WebKitWebView *v, Client *c)
 {
 	GdkRGBA bgcolor = { 0 };
 	GdkWindow *gwin;
+	char* bmarks;
 
 	c->finder = webkit_web_view_get_find_controller(c->view);
 	c->inspector = webkit_web_view_get_inspector(c->view);
@@ -1412,8 +1537,12 @@ showview(WebKitWebView *v, Client *c)
 		webkit_web_view_set_zoom_level(c->view,
 		                               curconfig[ZoomLevel].val.f);
 
+	bmarks = bookmarkproplist();
+
 	setatom(c, AtomFind, "");
 	setatom(c, AtomUri, "about:blank");
+	setatom(c, AtomSearch, "");
+	setatom(c, AtomBookList, bmarks);
 }
 
 GtkWidget *
@@ -2118,7 +2247,7 @@ main(int argc, char *argv[])
 	if (argc > 0)
 		arg.v = argv[0];
 	else
-		arg.v = "about:blank";
+		arg.v = home;
 
 	setup();
 	c = newclient(NULL);

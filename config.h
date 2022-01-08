@@ -6,8 +6,9 @@ static char *styledir       = "~/.surf/styles/";
 static char *certdir        = "~/.surf/certificates/";
 static char *cachedir       = "~/.surf/cache/";
 static char *cookiefile     = "~/.surf/cookies.txt";
+static char *bookmarkfile   = "~/.surf/bookmarks.txt";
 static char *dmenufont      = "Source Code Pro:pixelsize=30:antialias=true:autohint=true";
-static char *home	    = "https://ddg.gg";
+static char *home	    = "https://duckduckgo.com";
 static char *searchurl      = "https://duckduckgo.com/?q=%s";
 
 /* Webkit default features */
@@ -65,7 +66,9 @@ static WebKitFindOptions findopts = WEBKIT_FIND_OPTIONS_CASE_INSENSITIVE |
                                     WEBKIT_FIND_OPTIONS_WRAP_AROUND;
 
 
-
+#define PROMPT_BOOKMARK "Bookmarks:"
+#define PROMPT_BOOKMARKADD "Bookmark Name:"
+#define PROMPT_BOOKMARKDEL "Bookmark Delete:"
 #define PROMPT_GO   "Go:"
 #define PROMPT_FIND "Find:"
 #define PROMPT_SEARCH "Search:"
@@ -141,6 +144,9 @@ static Key keys[] = {
 	{ MODKEY,                GDK_KEY_f,      spawn,      SETPROP("_SURF_FIND", "_SURF_FIND", PROMPT_FIND, DMENU_FONT) },
 	{ MODKEY,                GDK_KEY_slash,  spawn,      SETPROP("_SURF_FIND", "_SURF_FIND", PROMPT_FIND, DMENU_FONT) },
 	{ MODKEY,                GDK_KEY_s,      spawn,      SETPROP("_SURF_SEARCH", "_SURF_SEARCH", PROMPT_SEARCH, DMENU_FONT) },
+	{ MODKEY,                GDK_KEY_b,      spawn,      SETPROP("_SURF_BOOKLIST", "_SURF_BOOK", PROMPT_BOOKMARK, DMENU_FONT) },
+	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_b,      spawn,      SETPROP("_SURF_FIND", "_SURF_BOOKADD", PROMPT_BOOKMARKADD, DMENU_FONT) },
+	{ MODKEY,                GDK_KEY_d,      spawn,      SETPROP("_SURF_BOOKLIST", "_SURF_BOOKDEL", PROMPT_BOOKMARKADD, DMENU_FONT) },
 
 	{ 0,                     GDK_KEY_Escape, stop,       { 0 } },
 	{ MODKEY,                GDK_KEY_c,      stop,       { 0 } },
@@ -155,7 +161,7 @@ static Key keys[] = {
 	{ MODKEY,                GDK_KEY_j,      scrollv,    { .i = +10 } },
 	{ MODKEY,                GDK_KEY_k,      scrollv,    { .i = -10 } },
 	{ MODKEY,                GDK_KEY_space,  scrollv,    { .i = +50 } },
-	{ MODKEY,                GDK_KEY_b,      scrollv,    { .i = -50 } },
+	{ MODKEY|GDK_SHIFT_MASK, GDK_KEY_space,  scrollv,    { .i = -50 } },
 	{ MODKEY,                GDK_KEY_i,      scrollh,    { .i = +10 } },
 	{ MODKEY,                GDK_KEY_u,      scrollh,    { .i = -10 } },
 
