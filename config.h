@@ -7,6 +7,7 @@ static char *certdir        = "~/.surf/certificates/";
 static char *cachedir       = "~/.surf/cache/";
 static char *cookiefile     = "~/.surf/cookies.txt";
 static char *bookmarkfile   = "~/.surf/bookmarks.txt";
+static char *passwordfile   = "~/.surf/passwords.txt";
 static char *dmenufont      = "Source Code Pro:pixelsize=30:antialias=true:autohint=true";
 static char *home	    = "https://duckduckgo.com";
 static char *searchurl      = "https://duckduckgo.com/?q=%s";
@@ -50,7 +51,7 @@ static Parameter defconfig[ParameterLast] = {
 	[StrictTLS]           =       { { .i = 1 },     },
 	[Style]               =       { { .i = 1 },     },
 	[WebGL]               =       { { .i = 0 },     },
-	[ZoomLevel]           =       { { .f = 3.0 },   },
+	[ZoomLevel]           =       { { .f = 2.0 },   },
 };
 
 static UriParameters uriparams[] = {
@@ -131,6 +132,12 @@ static SiteSpecific certs[] = {
 	{ "://suckless\\.org/", "suckless.org.crt" },
 };
 
+static SearchEngines searchengines[] = {
+	{"!g", "https://google.co.uk/search?q=%s"},
+	{"!hn", "https://hn.algolia.com/?q=%s"},
+};
+
+
 #define MODKEY GDK_CONTROL_MASK
 
 /* hotkeys */
@@ -156,7 +163,9 @@ static Key keys[] = {
 
 	{ MODKEY,                GDK_KEY_l,      navigate,   { .i = +1 } },
 	{ MODKEY,                GDK_KEY_h,      navigate,   { .i = -1 } },
-
+	/* Password Management */
+	{ MODKEY|GDK_SHIFT_MASK,  GDK_KEY_p,      getpassword,{ 0 } },
+	{ MODKEY|GDK_SHIFT_MASK,  GDK_KEY_u,      getusername,{ 0 } },
 	/* vertical and horizontal scrolling, in viewport percentage */
 	{ MODKEY,                GDK_KEY_j,      scrollv,    { .i = +10 } },
 	{ MODKEY,                GDK_KEY_k,      scrollv,    { .i = -10 } },

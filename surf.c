@@ -141,6 +141,11 @@ typedef struct {
 	regex_t re;
 } SiteSpecific;
 
+typedef struct {
+	char *prefix;
+	char *searchurl;
+} SearchEngines;
+
 /* Surf */
 static void die(const char *errstr, ...);
 static void usage(void);
@@ -177,6 +182,7 @@ static void spawn(Client *c, const Arg *a);
 static void msgext(Client *c, char type, const Arg *a);
 static void destroyclient(Client *c);
 static void cleanup(void);
+static const char *getfield(Client *c, char *fieldname);
 
 /* GTK/WebKit */
 static WebKitWebView *newview(Client *c, WebKitWebView *rv);
@@ -237,6 +243,8 @@ static void search(Client *c, const Arg *a);
 static void bookmarkgo(Client *c, const Arg *a);
 static void bookmarkadd(Client *c, const Arg *a);
 static void bookmarkdel(Client *c, const Arg *a);
+static void getusername(Client *c, const Arg *a);
+static void getpassword(Client *c, const Arg *a);
 static const char *bookmarkproplist();
 
 
@@ -362,6 +370,7 @@ setup(void)
 	cookiefile = buildfile(cookiefile);
 	scriptfile = buildfile(scriptfile);
 	bookmarkfile = buildfile(bookmarkfile);
+	passwordfile = buildfile(passwordfile);
 	certdir    = buildpath(certdir);
 	if (curconfig[Ephemeral].val.i)
 		cachedir = NULL;
@@ -607,11 +616,34 @@ loaduri(Client *c, const Arg *a)
 	g_free(url);
 }
 
-void 
+void
 search(Client *c, const Arg *a)
 {
 	Arg arg;
 	char *url;
+
+	for (int i = 0;i < LENGTH(searchengines);i++)
+	{
+		if (g_str_has_prefix(a->v, searchengines[i].prefix))
+		{
+			GString *searchitems = g_string_new("");
+
+			g_string_printf(searchitems, "%s", a->v);
+			g_string_replace(searchitems, searchengines[i].prefix, "", 0);
+
+			url = g_strdup_printf(searchengines[i].searchurl, searchitems->str);
+
+			arg.v = url;
+			loaduri(c, &arg);
+
+			g_free(url);
+
+			return;
+		}
+	}
+	gchar *query = a->v;
+	if(query[0] == '\0')
+		return;
 
 	url = g_strdup_printf(searchurl, a->v);
 	arg.v = url;
@@ -656,7 +688,7 @@ bookmarkgo(Client *c, const Arg *a)
 	arg.v = url;
 	if(url != NULL)
 		loaduri(c, &arg);
-	
+
 	g_key_file_free(bmarks);
 	g_free(url);
 
@@ -676,7 +708,7 @@ bookmarkadd(Client *c, const Arg *a)
 
 	prop = bookmarkproplist();
 	setatom(c, AtomBookList, prop);
-	
+
 	g_key_file_free(bmarks);
 	g_free(prop);
 }
@@ -695,11 +727,73 @@ bookmarkdel(Client *c, const Arg *a)
 
 	prop = bookmarkproplist();
 	setatom(c, AtomBookList, prop);
-	
+
 	g_key_file_free(bmarks);
 	g_free(prop);
 }
 
+const char *
+getfield(Client *c, char *fieldname)
+{
+	GKeyFile *passwd = g_key_file_new();
+	gchar** sites;
+	gsize* length;
+	char *url;
+
+	g_key_file_load_from_file(passwd, passwordfile, G_KEY_FILE_NONE, NULL);
+
+	sites = g_key_file_get_groups(passwd, &length);
+
+	for(int i = 0; i<length; i++)
+	{
+		gchar* urlregex = g_key_file_get_string(passwd, sites[i], "URLRegex", NULL);	     	gchar* field = g_key_file_get_string(passwd, sites[i], fieldname, NULL);
+
+		GRegex *regex = g_regex_new(urlregex, 0, 0, NULL);
+
+		char* url = geturi(c);
+		printf(field);
+		printf(url);
+		printf(urlregex);
+		if (g_regex_match(regex, url, 0, NULL))
+		{
+			return field;
+		}
+	}
+
+	return "";
+}
+
+void
+getusername(Client *c, const Arg *a)
+{
+	char* username;
+	GtkClipboard* clip;
+	clip = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+	username = getfield(c, "Username");
+	gtk_clipboard_set_text(clip, username, -1);
+}
+
+void
+getpassword(Client *c, const Arg *a)
+{
+	char* password;
+	GtkClipboard* clip;
+	clip = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+	password = getfield(c, "Password");
+	gtk_clipboard_set_text(clip, password, -1);
+}
+
+
+//get username (mirror above with username not passwd
+
+// Add workflow
+// 	- Trigger start
+//  - Suggested regex (everything pre / & no protocol with * in DMENU
+//  - Enter Username
+//  - Enter Passwd
+//  - Add to Keyfile
+
+// Once basic is working add encryption to password line (libcrypt?)
 const char *
 geturi(Client *c)
 {
@@ -752,11 +846,10 @@ updatetitle(Client *c)
 		getpagestats(c);
 
 		if (c->progress != 100)
-			title = g_strdup_printf("[%i%%] %s:%s | %s",
-			        c->progress, togglestats, pagestats, name);
+			title = g_strdup_printf("[%i%%] | %s",
+			        c->progress, name);
 		else
-			title = g_strdup_printf("%s:%s | %s",
-			        togglestats, pagestats, name);
+			title = g_strdup_printf("%s", name);
 
 		gtk_window_set_title(GTK_WINDOW(c->win), title);
 		g_free(title);
@@ -1541,7 +1634,6 @@ showview(WebKitWebView *v, Client *c)
 
 	setatom(c, AtomFind, "");
 	setatom(c, AtomUri, "about:blank");
-	setatom(c, AtomSearch, "");
 	setatom(c, AtomBookList, bmarks);
 }
 
@@ -2244,18 +2336,19 @@ main(int argc, char *argv[])
 	default:
 		usage();
 	} ARGEND;
-	if (argc > 0)
+
+	if (argc > 0) {
 		arg.v = argv[0];
-	else
+	} else {
 		arg.v = home;
+	}
 
 	setup();
 	c = newclient(NULL);
 	showview(NULL, c);
-
+	setatom(c, AtomSearch, "");
 	loaduri(c, &arg);
 	updatetitle(c);
-
 	gtk_main();
 	cleanup();
 
